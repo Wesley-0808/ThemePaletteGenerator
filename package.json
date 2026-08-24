@@ -1,14 +1,35 @@
 {
   "name": "@wesley-0808/theme-palette-generator",
-  "private": true,
-  "version": "1.0.0",
+  "private": false,
+  "version": "0.0.1",
   "author": "Wesley",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Wesley-0808/ThemePaletteGenerator.git"
+  },
+  "main": "dist/lib/index.js",
+  "module": "dist/lib/index.js",
+  "types": "dist/lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib/index.d.ts",
+      "import": "./dist/lib/index.js"
+    }
+  },
+  "files": [
+    "dist/lib"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "typecheck": "vue-tsc --noEmit",
     "build:lib": "rm -rf dist/lib && tsc -p tsconfig.lib.json && node scripts/build-lib-index.mjs",
+    "prepublishOnly": "pnpm run build:lib",
     "preview": "vite preview"
   },
   "dependencies": {

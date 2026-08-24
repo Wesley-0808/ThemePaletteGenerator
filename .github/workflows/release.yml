@@ -1,0 +1,120 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    # 仅当版本号（package.json）或更新日志变更时触发发布流程
+    paths:
+      - 'package.json'
+      - 'CHANGELOG.md'
+  workflow_dispatch:
+
+# 创建 Tag 与 GitHub Release 需要 contents: write；
+# npm OIDC 可信发布（Trusted Publishing）需要 id-token: write 以申请短时 OIDC 令牌。
+permissions:
+  contents: write
+  id-token: write
+
+# 避免同一版本并发发布
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # 仅官方仓库发布，防止 fork PR 误发布
+    if: github.repository == 'Wesley-0808/ThemePaletteGenerator'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # pnpm 10.16+ 原生支持 OIDC 可信发布（pnpm 9 不支持）
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Node 24 自带 npm >= 11.5.1（OIDC 最低要求）；Node 22 自带 npm 过旧
+          node-version: 24
+          # 写入指向 npm registry 的 .npmrc，供 pnpm 走 OIDC 流程；
+          # 注意：不要设置 token 输入或 NODE_AUTH_TOKEN，否则会禁用 OIDC。
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Read package version
+        id: pkg
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+      # 若对应版本 Tag 已存在，说明已发布过，跳过本次（幂等）
+      - name: Check if release tag exists
+        id: tagcheck
+        run: |
+          VERSION="${{ steps.pkg.outputs.version }}"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag v$VERSION 已存在，跳过发布。"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 预发版：-alpha -> alpha 标签，-beta -> beta 标签，否则 latest
+      - name: Determine npm dist-tag
+        id: disttag
+        if: steps.tagcheck.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.pkg.outputs.version }}"
+          if [[ "$VERSION" == *-alpha* ]]; then TAG=alpha
+          elif [[ "$VERSION" == *-beta* ]]; then TAG=beta
+          else TAG=latest
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "npm dist-tag: $TAG"
+
+      - name: Build library (dist/lib)
+        if: steps.tagcheck.outputs.exists == 'false'
+        run: pnpm run build:lib
+
+      - name: Extract changelog for this version
+        if: steps.tagcheck.outputs.exists == 'false'
+        run: node scripts/extract-changelog.mjs "${{ steps.pkg.outputs.version }}" > release-notes.md
+
+      # npm OIDC 可信发布（Trusted Publishing）：无需 NPM_TOKEN 密钥。
+      # 前置条件（见 DESIGN.md）：已在 npmjs.com 该包 Settings → Trusted publishing
+      # 配置 GitHub Actions（owner: Wesley-0808, repo: ThemePaletteGenerator, workflow: release.yml）。
+      # 不要设置 NODE_AUTH_TOKEN，否则会禁用 OIDC 流程。
+      # --provenance 自动生成来源证明（Supply-chain provenance）。
+      - name: Publish to npm (OIDC Trusted Publishing)
+        if: steps.tagcheck.outputs.exists == 'false'
+        run: pnpm publish --no-git-checks --tag "${{ steps.disttag.outputs.tag }}" --provenance --access public
+
+      - name: Create Git tag
+        if: steps.tagcheck.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.pkg.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+
+      - name: Create GitHub Release
+        if: steps.tagcheck.outputs.exists == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.pkg.outputs.version }}"
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --notes-file release-notes.md
