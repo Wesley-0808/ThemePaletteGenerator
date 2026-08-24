@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": false,
+    "outDir": "dist/lib",
+    "rootDir": "src",
+    "types": []
+  },
+  "include": ["src/utils/color.ts", "src/types/theme.ts"],
+  "exclude": ["node_modules", "dist", "src/**/*.vue"]
+}
