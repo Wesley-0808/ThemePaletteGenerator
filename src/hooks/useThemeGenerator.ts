@@ -1,5 +1,6 @@
 import { computed, ref, watch } from "vue";
 import {
+  buildModeCssVars,
   generateTheme,
   isValidHex,
   themeToCssVariables,
@@ -7,7 +8,6 @@ import {
 } from "../utils/color";
 import type {
   ColorScale,
-  ScaleLevel,
   ThemeOptions,
   ThemeResult,
 } from "../types/theme";
@@ -65,42 +65,14 @@ export function useThemeGenerator(initial = "#1C4D9F") {
 
   const tokens = computed(() => (current.value ? current.value.tokens : null));
 
-  // 把当前主题映射为 TDesign CSS 变量对象，挂到页面根节点后：
-  // 1) 预览区直接用 TDesign 组件（t-button/t-card/t-input/t-tag）消费这些变量，不再手写 background/color；
-  // 2) 页面底色 / 文字改用 var(--td-*)，随 theme-mode 自动适配深色。
-  const LEVELS: ScaleLevel[] = [
-    50, 100, 200, 300, 400, 500, 600, 700, 800, 900,
-  ];
+  // 把当前主题映射为完整 TDesign 色彩 CSS 变量对象（含 brand/gray 色阶与全部
+  // 语义变量），挂到页面根节点后：预览区直接用 TDesign 组件（t-button/t-card/
+  // t-input/t-tag）消费这些变量，不再手写 background/color；页面底色 / 文字
+  // 改用 var(--td-*)，随 theme-mode 自动适配深色。
   const cssVars = computed<Record<string, string>>(() => {
     const c = current.value;
     if (!c) return {};
-    const tk = c.tokens;
-    const vars: Record<string, string> = {
-      "--td-brand-color": tk.brand,
-      "--td-gray-color": c.neutral[600],
-      "--td-brand-color-hover": tk.brandHover,
-      "--td-brand-color-active": tk.brandActive,
-      "--td-brand-color-light": tk.brandSubtle,
-      "--td-bg-color-page": tk.bg,
-      "--td-bg-color-container": tk.surface,
-      "--td-bg-color-container-hover": tk.surfaceHover,
-      "--td-component-bg": tk.surface,
-      "--td-component-stroke": tk.border,
-      "--td-border-level-2-color": tk.borderHover,
-      "--td-text-color-primary": tk.text,
-      "--td-text-color-secondary": tk.textSecondary,
-      "--td-text-color-anti": tk.textInverse,
-    };
-    LEVELS.forEach((lv, i) => {
-      vars[`--td-brand-color-${i + 1}`] = c.primary[lv];
-      vars[`--td-gray-color-${i + 1}`] = c.neutral[lv];
-    });
-    if (c.bgGrays) {
-      [11, 12, 13, 14].forEach((n, i) => {
-        vars[`--td-gray-color-${n}`] = c.bgGrays[i];
-      });
-    }
-    return vars;
+    return buildModeCssVars(c, mode.value === "dark");
   });
 
   function setColor(hex: string) {

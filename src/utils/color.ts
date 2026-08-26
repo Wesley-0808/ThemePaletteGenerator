@@ -2,10 +2,12 @@ import type {
   ColorScale,
   Oklch,
   ScaleLevel,
+  ThemeMode,
   ThemeOptions,
   ThemeResult,
   ThemeTokens,
 } from "../types/theme";
+import { TD_DEFAULT_DARK, TD_DEFAULT_LIGHT } from "./tdDefaults.js";
 
 const HEX_RE = /^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
@@ -326,75 +328,187 @@ export function themeToJson(theme: ThemeResult): string {
   return JSON.stringify(theme, null, 2);
 }
 
-/** 50..900 色阶 → TDesign 1..10 序号命名 */
-function scaleToTdVars(scale: ColorScale, token: string): string {
-  return LEVELS.map((lv, i) => `  --td-${token}-${i + 1}: ${scale[lv]};`).join(
-    "\n",
-  );
-}
+/* ------------------------------------------------------------------ *
+ * 主题色彩 CSS 变量生成（只覆盖「由主题色推导」的变量）
+ * 覆盖范围：品牌色阶 + 品牌别名、中性(gray)色阶 1..14、以及由它们推导的
+ *   - bg-color-*   背景语义变量
+ *   - text-color-* 文字语义变量
+ *   - border-*     描边/边框语义变量（均由 gray 推导）
+ * 不覆盖 error/warning/success 等状态色，以及字体 alpha 梯度、mask、
+ * scrollbar、表格阴影等固定覆盖层色（这些不随主题色变化，由 TDesign 默认
+ * 提供即可）。非色彩 Token（间距/尺寸/圆角/层级/字号/动画等）亦不生成。
+ * ------------------------------------------------------------------ */
 
-/** 深色背景灰 gray-11..14 → TDesign 序号命名 */
-function bgGraysToTdVars(grays: string[]): string {
-  return [11, 12, 13, 14]
-    .map((n, i) => `  --td-gray-color-${n}: ${grays[i]};`)
-    .join("\n");
-}
+/** 语义变量引用：取自品牌色阶 / 中性色阶 / 固定常量 */
+type ColorRef =
+  | { kind: "brand"; i: number }
+  | { kind: "gray"; i: number }
+  | { kind: "const"; v: string };
 
-/** TDesign 语义 Token 的 CSS 变量名映射 */
-const TOKEN_CSS_MAP: Record<keyof ThemeTokens, string> = {
-  brand: "--td-brand-color",
-  brandHover: "--td-brand-color-hover",
-  brandActive: "--td-brand-color-active",
-  brandSubtle: "--td-brand-color-light",
-  bg: "--td-bg-color",
-  surface: "--td-bg-color-page",
-  surfaceHover: "--td-bg-color-container-hover",
-  border: "--td-component-stroke",
-  borderHover: "--td-border-level-2-color",
-  text: "--td-text-color-primary",
-  textSecondary: "--td-text-color-secondary",
-  textInverse: "--td-text-color-anti",
+/** 品牌色别名 → 色阶序号（浅 / 深模式不同） */
+const BRAND_ALIAS_LIGHT: Record<string, number> = {
+  "": 7,
+  hover: 6,
+  focus: 2,
+  active: 8,
+  disabled: 3,
+  light: 1,
+  "light-hover": 2,
+};
+const BRAND_ALIAS_DARK: Record<string, number> = {
+  "": 8,
+  hover: 7,
+  focus: 2,
+  active: 9,
+  disabled: 3,
+  light: 1,
+  "light-hover": 2,
 };
 
-function tokensToCssVars(tokens: ThemeTokens): string {
-  return (Object.keys(TOKEN_CSS_MAP) as (keyof ThemeTokens)[])
-    .map((k) => `  ${TOKEN_CSS_MAP[k]}: ${tokens[k]};`)
-    .join("\n");
+/** 背景语义变量映射（浅 / 深） */
+const BG_LIGHT: [string, ColorRef][] = [
+  ["bg-color-page", { kind: "gray", i: 2 }],
+  ["bg-color-container", { kind: "const", v: "#ffffff" }],
+  ["bg-color-container-hover", { kind: "gray", i: 1 }],
+  ["bg-color-container-active", { kind: "gray", i: 3 }],
+  ["bg-color-container-select", { kind: "const", v: "#ffffff" }],
+  ["bg-color-secondarycontainer", { kind: "gray", i: 1 }],
+  ["bg-color-secondarycontainer-hover", { kind: "gray", i: 2 }],
+  ["bg-color-secondarycontainer-active", { kind: "gray", i: 4 }],
+  ["bg-color-component", { kind: "gray", i: 3 }],
+  ["bg-color-component-hover", { kind: "gray", i: 4 }],
+  ["bg-color-component-active", { kind: "gray", i: 6 }],
+  ["bg-color-secondarycomponent", { kind: "gray", i: 4 }],
+  ["bg-color-secondarycomponent-hover", { kind: "gray", i: 5 }],
+  ["bg-color-secondarycomponent-active", { kind: "gray", i: 6 }],
+  ["bg-color-component-disabled", { kind: "gray", i: 2 }],
+  ["bg-color-specialcomponent", { kind: "const", v: "#ffffff" }],
+];
+const BG_DARK: [string, ColorRef][] = [
+  ["bg-color-page", { kind: "gray", i: 14 }],
+  ["bg-color-container", { kind: "gray", i: 13 }],
+  ["bg-color-container-hover", { kind: "gray", i: 12 }],
+  ["bg-color-container-active", { kind: "gray", i: 10 }],
+  ["bg-color-container-select", { kind: "gray", i: 9 }],
+  ["bg-color-secondarycontainer", { kind: "gray", i: 12 }],
+  ["bg-color-secondarycontainer-hover", { kind: "gray", i: 11 }],
+  ["bg-color-secondarycontainer-active", { kind: "gray", i: 9 }],
+  ["bg-color-component", { kind: "gray", i: 11 }],
+  ["bg-color-component-hover", { kind: "gray", i: 10 }],
+  ["bg-color-component-active", { kind: "gray", i: 9 }],
+  ["bg-color-secondarycomponent", { kind: "gray", i: 10 }],
+  ["bg-color-secondarycomponent-hover", { kind: "gray", i: 9 }],
+  ["bg-color-secondarycomponent-active", { kind: "gray", i: 8 }],
+  ["bg-color-component-disabled", { kind: "gray", i: 12 }],
+  ["bg-color-specialcomponent", { kind: "const", v: "transparent" }],
+];
+/** 文字语义变量映射（浅 / 深） */
+const TEXT_LIGHT: [string, ColorRef][] = [
+  ["text-color-primary", { kind: "const", v: "rgba(0, 0, 0, 0.9)" }],
+  ["text-color-secondary", { kind: "const", v: "rgba(0, 0, 0, 0.6)" }],
+  ["text-color-placeholder", { kind: "const", v: "rgba(0, 0, 0, 0.4)" }],
+  ["text-color-disabled", { kind: "const", v: "rgba(0, 0, 0, 0.26)" }],
+  ["text-color-anti", { kind: "const", v: "#ffffff" }],
+  ["text-color-brand", { kind: "brand", i: 7 }],
+  ["text-color-link", { kind: "brand", i: 8 }],
+  ["text-color-watermark", { kind: "const", v: "rgba(0, 0, 0, 0.1)" }],
+];
+const TEXT_DARK: [string, ColorRef][] = [
+  ["text-color-primary", { kind: "const", v: "rgba(255, 255, 255, 0.9)" }],
+  ["text-color-secondary", { kind: "const", v: "rgba(255, 255, 255, 0.55)" }],
+  ["text-color-placeholder", { kind: "const", v: "rgba(255, 255, 255, 0.35)" }],
+  ["text-color-disabled", { kind: "const", v: "rgba(255, 255, 255, 0.22)" }],
+  ["text-color-anti", { kind: "const", v: "#ffffff" }],
+  ["text-color-brand", { kind: "brand", i: 8 }],
+  ["text-color-link", { kind: "brand", i: 8 }],
+  ["text-color-watermark", { kind: "const", v: "rgba(255, 255, 255, 0.1)" }],
+];
+/** 边框 / 描边语义变量映射（浅 / 深） */
+const BORDER_LIGHT: [string, ColorRef][] = [
+  ["border-level-1-color", { kind: "gray", i: 3 }],
+  ["component-stroke", { kind: "gray", i: 3 }],
+  ["border-level-2-color", { kind: "gray", i: 4 }],
+  ["component-border", { kind: "gray", i: 4 }],
+];
+const BORDER_DARK: [string, ColorRef][] = [
+  ["border-level-1-color", { kind: "gray", i: 11 }],
+  ["component-stroke", { kind: "gray", i: 11 }],
+  ["border-level-2-color", { kind: "gray", i: 9 }],
+  ["component-border", { kind: "gray", i: 9 }],
+];
+
+/**
+ * 生成单模式的 TDesign 主题色彩 CSS 变量映射（解析为字面量，开箱即用）。
+ * 仅覆盖由主题色推导的变量：品牌色阶 + 别名、中性(gray)色阶 1..14、
+ * 以及由它们推导的 bg-color-* / text-color-* / border-* 语义变量。
+ * 生成值与 TDesign 默认一致时不输出（不覆盖），保持最小导出。
+ */
+export function buildModeCssVars(
+  mode: ThemeMode,
+  isDark: boolean,
+): Record<string, string> {
+  const { primary, neutral, bgGrays } = mode;
+  const vars: Record<string, string> = {};
+
+  const brandAt = (n: number) => primary[LEVELS[n - 1]];
+  const grayAt = (n: number) =>
+    n <= 10 ? neutral[LEVELS[n - 1]] : bgGrays[n - 11];
+  const resolve = (r: ColorRef): string =>
+    r.kind === "const"
+      ? r.v
+      : r.kind === "brand"
+        ? brandAt(r.i)
+        : grayAt(r.i);
+
+  // 品牌色阶 1..10
+  for (let i = 1; i <= 10; i++) vars[`--td-brand-color-${i}`] = brandAt(i);
+  // 中性色阶 1..14
+  for (let i = 1; i <= 14; i++) vars[`--td-gray-color-${i}`] = grayAt(i);
+  // 中性基准（兼容别名，非 TDesign 原生）
+  vars["--td-gray-color"] = grayAt(7);
+
+  // 品牌色别名
+  const brandAlias = isDark ? BRAND_ALIAS_DARK : BRAND_ALIAS_LIGHT;
+  for (const [suffix, idx] of Object.entries(brandAlias)) {
+    vars[`--td-brand-color${suffix ? "-" + suffix : ""}`] = brandAt(idx);
+  }
+
+  // 背景 / 文字 / 边框 语义变量（均由品牌 / 中性色阶推导）
+  const semanticMaps = isDark
+    ? [BG_DARK, TEXT_DARK, BORDER_DARK]
+    : [BG_LIGHT, TEXT_LIGHT, BORDER_LIGHT];
+  semanticMaps.forEach((map) => {
+    map.forEach(([name, ref]) => {
+      vars[`--td-${name}`] = resolve(ref);
+    });
+  });
+
+  // 与 TDesign 默认值一致则不输出（不覆盖），保持最小导出
+  const defaults = (isDark ? TD_DEFAULT_DARK : TD_DEFAULT_LIGHT) as Record<
+    string,
+    string
+  >;
+  for (const k of Object.keys(vars)) {
+    const d = defaults[k];
+    if (d && d.toLowerCase() === vars[k].toLowerCase()) delete vars[k];
+  }
+
+  return vars;
 }
 
-/** 导出为 TDesign CSS 变量（:root 浅色 / .dark 深色），关联 --td-brand-color / --td-gray-color 及其 1..14 色阶 */
+/** 导出为完整 TDesign 色彩 CSS 变量：:root 浅色 / :root[theme-mode='dark'] 深色 */
 export function themeToCssVariables(theme: ThemeResult): string {
-  const lt = theme.light;
-  const dk = theme.dark;
-  const lines: string[] = [];
-
-  lines.push(":root {");
-  lines.push("  /* 品牌色阶 */");
-  lines.push(scaleToTdVars(lt.primary, "brand-color"));
-  lines.push("  /* 中性色阶 */");
-  lines.push(scaleToTdVars(lt.neutral, "gray-color"));
-  lines.push("  /* 深色背景灰 */");
-  lines.push(bgGraysToTdVars(lt.bgGrays));
-  lines.push("  /* 主题主色 / 中性基准 */");
-  lines.push(`  --td-brand-color: ${lt.primary[600]};`);
-  lines.push(`  --td-gray-color: ${lt.neutral[600]};`);
-  lines.push("  /* 语义 Token */");
-  lines.push(tokensToCssVars(lt.tokens));
-  lines.push("}");
-
-  lines.push("");
-  lines.push(".dark {");
-  lines.push("  /* 深色品牌色阶 */");
-  lines.push(scaleToTdVars(dk.primary, "brand-color"));
-  lines.push("  /* 中性色阶 */");
-  lines.push(scaleToTdVars(dk.neutral, "gray-color"));
-  lines.push("  /* 深色背景灰 */");
-  lines.push(bgGraysToTdVars(dk.bgGrays));
-  lines.push(`  --td-brand-color: ${dk.primary[700]};`);
-  lines.push(`  --td-gray-color: ${dk.neutral[600]};`);
-  lines.push("  /* 语义 Token */");
-  lines.push(tokensToCssVars(dk.tokens));
-  lines.push("}");
-
-  return lines.join("\n");
+  const indent = (vars: Record<string, string>) =>
+    Object.entries(vars)
+      .map(([k, v]) => `  ${k}: ${v};`)
+      .join("\n");
+  return [
+    ":root {",
+    indent(buildModeCssVars(theme.light, false)),
+    "}",
+    "",
+    ":root[theme-mode='dark'] {",
+    indent(buildModeCssVars(theme.dark, true)),
+    "}",
+  ].join("\n");
 }
