@@ -1,3 +1,9 @@
+### 0.1.2
+
+#### bug fixes
+
+- 修复生成的TDesign cssVars有部分缺失的问题。
+
 ### 0.1.1
 
 #### feat
