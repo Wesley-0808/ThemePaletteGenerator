@@ -6,11 +6,7 @@ import {
   themeToCssVariables,
   themeToJson,
 } from "../utils/color";
-import type {
-  ColorScale,
-  ThemeOptions,
-  ThemeResult,
-} from "../types/theme";
+import type { ColorScale, ThemeOptions, ThemeResult } from "../types/theme";
 
 export type ThemeMode = "light" | "dark";
 
@@ -30,8 +26,8 @@ export function useThemeGenerator(initial = "#1C4D9F") {
   const primaryColor = ref(initial);
   const mode = ref<ThemeMode>("light");
   const error = ref<string | null>(null);
-  /** 中性色是否关联主题色（继承色相）；默认 false = 纯灰 */
-  const neutralInherit = ref(false);
+  /** 中性色是否关联主题色（继承色相） */
+  const neutralInherit = ref(true);
 
   const theme = computed<ThemeResult | null>(() => {
     const hex = primaryColor.value.trim();

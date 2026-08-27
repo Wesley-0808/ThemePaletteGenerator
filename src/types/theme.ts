@@ -26,8 +26,10 @@ export interface ThemeTokens {
 export interface ThemeMode {
   primary: ColorScale;
   neutral: ColorScale;
-  /** 深色背景灰 gray-11..14，深浅一致 */
+  /** 深色背景灰 gray-11..14（取自中性色阶 11..14） */
   bgGrays: string[];
+  /** 主色在 10 级色阶中的 1 基下标（浅/深模式不同，由 generateBrandTokenMap 推导） */
+  brandIdx: number;
   tokens: ThemeTokens;
 }
 
@@ -46,6 +48,9 @@ export interface Oklch {
 
 /** 主题生成选项 */
 export interface ThemeOptions {
-  /** 中性色是否继承主题色相（蓝→蓝灰、紫→紫灰）；默认 false 为纯灰，对齐 TDesign --td-gray-color */
+  /**
+   * 中性灰是否关联主题色（品牌相关的中性灰，带极淡主题色相）。
+   * TDesign 默认开启（与官方生成器一致）；关闭则为不关联主色的平滑灰阶。
+   */
   neutralInheritPrimary?: boolean;
 }

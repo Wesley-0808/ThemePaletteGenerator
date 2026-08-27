@@ -129,7 +129,7 @@ const json = themeToJson(theme);
 | 参数                            | 类型      | 说明                                                                                              |
 | ------------------------------- | --------- | ------------------------------------------------------------------------------------------------- |
 | `primaryColor`                  | `string`  | 主色 HEX，如 `"#0052D9"`、`"1C4D9F"`（3/6 位均可，可不带 `#`）                                    |
-| `options.neutralInheritPrimary` | `boolean` | 中性色是否极轻继承主色相（蓝→蓝灰、紫→紫灰）。默认 `false` = 纯灰，对齐 TDesign `--td-gray-color` |
+| `options.neutralInheritPrimary` | `boolean` | 中性灰是否关联主题色（带极淡主题色相）。默认 `true`，对齐 TDesign 官方生成器 |
 
 返回的 `ThemeResult`：
 
@@ -148,11 +148,11 @@ interface ThemeMode {
 
 #### 色阶与单级生成函数
 
-| 函数                     | 签名                                                         | 说明                                     |
-| ------------------------ | ------------------------------------------------------------ | ---------------------------------------- |
-| `generateColorScale`     | `(primaryColor: string) => ColorScale`                       | 仅生成浅色品牌 10 级色阶（主色锚定 600） |
-| `generateNeutralScale`   | `(primaryColor: string, inheritHue?: boolean) => ColorScale` | 仅生成中性 10 级色阶                     |
-| `generateDarkBrandScale` | `(primaryColor: string) => ColorScale`                       | 仅生成深色品牌 10 级色阶（反向、更明亮） |
+| 函数                     | 签名                                                         | 说明                                                       |
+| ------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------- |
+| `generateColorScale`     | `(primaryColor: string) => ColorScale`                       | 仅生成浅色品牌 10 级色阶（主色按 CIEDE2000 动态锚定）      |
+| `generateNeutralScale`   | `(primaryColor: string, related?: boolean) => ColorScale`    | 仅生成中性 10 级色阶（related 默认 true，关联主题色）      |
+| `generateDarkBrandScale` | `(primaryColor: string) => ColorScale`                       | 仅生成深色品牌 10 级色阶（浅色色阶反向前 10 档）           |
 
 `ColorScale` 是 `{ 50, 100, 200, 300, 400, 500, 600, 700, 800, 900 }` 到 HEX 字符串的映射。
 
@@ -160,18 +160,16 @@ interface ThemeMode {
 
 | 函数                  | 签名                             | 说明                                         |
 | --------------------- | -------------------------------- | -------------------------------------------- |
-| `themeToCssVariables` | `(theme: ThemeResult) => string` | 导出 `:root` / `.dark` 下的 TDesign CSS 变量 |
+| `themeToCssVariables` | `(theme: ThemeResult) => string` | 导出 `:root` / `:root[theme-mode='dark']` 下的 TDesign CSS 变量 |
 | `themeToJson`         | `(theme: ThemeResult) => string` | 导出格式化 JSON                              |
 
 #### 颜色工具函数
 
-| 函数                        | 签名                                      | 说明                                     |
-| --------------------------- | ----------------------------------------- | ---------------------------------------- |
-| `isValidHex`                | `(input: string) => boolean`              | 校验 HEX 合法性                          |
-| `normalizeHex`              | `(input: string) => string`               | 规整为 `#rrggbb`（小写）                 |
-| `hexToRgb` / `rgbToHex`     | `(hex) => [r,g,b]` / `(r,g,b) => hex`     | RGB ↔ HEX                                |
-| `hexToOklch` / `oklchToHex` | `(hex) => Oklch` / `(L,C,H) => hex`       | HEX ↔ OKLCH                              |
-| `rgbToOklch` / `oklchToRgb` | `(r,g,b) => Oklch` / `(L,C,H) => [r,g,b]` | RGB ↔ OKLCH                              |
+| 函数         | 签名                         | 说明                |
+| ------------ | ---------------------------- | ------------------- |
+| `isValidHex` | `(input: string) => boolean` | 校验 HEX 合法性     |
+
+> 底层色阶算法位于 `src/utils/palette.ts`（无三方依赖的 HCT/CAM16 复刻，与 TDesign `tvision-color` 字节级一致），由 `src/utils/hct.ts` 提供 HCT 转换。
 | `gamutMapOklch`             | `(L,C,H) => Oklch`                        | 色域映射（保持 L/H，二分降 C 落入 sRGB） |
 | `relativeLuminance`         | `(hex) => number`                         | 相对亮度（0–1）                          |
 | `contrastText`              | `(hex) => "#000000" \| "#ffffff"`         | 返回对比度更高的文字色                   |

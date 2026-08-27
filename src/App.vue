@@ -5,10 +5,12 @@ import ThemePreview from "./components/ThemePreview.vue";
 import ExportPanel from "./components/ExportPanel.vue";
 import { useThemeGenerator } from "./hooks/useThemeGenerator";
 import type { ThemeMode } from "./hooks/useThemeGenerator";
+import type { ScaleLevel } from "../types/theme";
 
 const {
   primaryColor,
   mode,
+  current,
   error,
   neutralInherit,
   setNeutralInherit,
@@ -22,7 +24,9 @@ const {
   PRESETS,
 } = useThemeGenerator("#1C4D9F");
 
-const MAIN_LEVEL = { light: 600, dark: 700 } as const;
+const LEVELS: ScaleLevel[] = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900];
+const brandLevelOf = (idx: number | undefined) =>
+  idx ? LEVELS[idx - 1] : undefined;
 
 function onModeChange(val: string | number | boolean | undefined) {
   setMode(val as ThemeMode);
@@ -91,16 +95,12 @@ function onNeutralInheritChange(val: string | number | boolean) {
           <ColorScale
             title="主题色阶"
             :scale="primaryScale"
-            :main-level="MAIN_LEVEL[mode]"
+            :main-level="brandLevelOf(current?.brandIdx)"
           />
         </section>
 
         <section class="card">
-          <ColorScale
-            title="中性色阶"
-            :scale="neutralScale"
-            :main-level="MAIN_LEVEL[mode]"
-          />
+          <ColorScale title="中性色阶" :scale="neutralScale" />
         </section>
 
         <section class="card">

@@ -6,7 +6,7 @@ import { MessagePlugin } from "tdesign-vue-next";
 const props = defineProps<{
   title?: string;
   scale: ColorScale;
-  /** 主色级（Light=600 / Dark=700），用于高亮 */
+  /** 主色级（由父组件按真实锚定位传入），用于高亮 BRAND */
   mainLevel?: ScaleLevel;
 }>();
 

@@ -1,3 +1,9 @@
+### 0.2.0
+
+#### breaking changes
+
+- 改颜色算法。
+
 ### 0.1.2
 
 #### bug fixes
